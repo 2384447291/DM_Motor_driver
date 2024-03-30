@@ -9,7 +9,7 @@ d2=np.reshape(C,[3,1])
 
 print(d1)
 print(d2)
-
+print(B[0,1:3].T)
 
 
 

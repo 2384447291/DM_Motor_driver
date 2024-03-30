@@ -22,18 +22,25 @@ class planer:
     
 class finger_link(kCalculator): # 带连杆的3R机械臂
     A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
+    A_inv=np.linalg.inv(A)
     def __init__(self,_arg) -> None:
         super().__init__()
         self.arg=_arg
         self.RRR=finger_RRR(_arg)
-    def fk(self,q): # q : 1*3
-        q=np.reshape(q,[1,3])
-        q=q+self.arg[0,3:6] # 实际值+初始bias
+    def fk(self,q): 
+        q=np.reshape(q,[3,1])     # 电机角度
+        q=q+self.arg[0,3:6].T     # q_link = 电机角度+初始bias
+        q=self.A_inv@q            # q_RRR = A-1 @ q_link
         pos=self.RRR.fk(q)
+        
         return pos
-    def ik(self,px): # px : 1*3
-        px=np.reshape(px,[1,3])
-        q=self.RRR.ik(px)-self.arg[0,3:6]
+    def ik(self,px):
+        q=self.RRR.ik(px)         # q_RRR
+        q=np.reshape(q,[3,1])
+        q=self.A@q                # q_link = A @ q_RRR
+        q=q-self.arg[0,3:6].T     #电机角度 = q_link - 初始bias
+
+        q=np.reshape(q,[1,3])
         return q
     def jacobian(self,q):
         q=np.reshape(q,[1,3])
@@ -195,6 +202,11 @@ class resetplaner(planer):
         else: # i>n
             q=self.q
         return q
+
+
+
+
+
 
 
 def agree(p1,p2):
