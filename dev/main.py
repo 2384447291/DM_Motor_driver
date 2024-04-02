@@ -36,11 +36,14 @@ last_sample_time = 0
 have_head = False
 
 # 机器人参数和规划器
-arg=np.mat([0,100,100,0,0,-23.58/180*np.pi])
+arg=np.mat([0,0.100,0.100,0,0,-23.58/180*np.pi]) # l:[m], theta:[rad]
 n1=3000
-n2=300
-pll=Planer.testlineplaner(Planer.finger_link(arg),n2)
+n2=3000
+pll=Planer.testcatchplaner(Planer.finger_link(arg),n2)
 rpll=Planer.resetplaner(pll.getJointAng(1),n1)
+
+integral=0.0
+err_last=0.0
 
 #是否需要打开图像
 is_need_plot = True  
@@ -50,8 +53,8 @@ sample_time = 0.01
 
 #定义电机(注册4个以上电机UI会爆，懒得修了，你自己手动改吧)
 Motor1 = Motor.DMmotor(1,MotorMode["MIT_MODE"])
-# Motor2 = Motor.DMmotor(2,MotorMode["MIT_MODE"])
-# Motor3 = Motor.DMmotor(3,MotorMode["MIT_MODE"])
+Motor2 = Motor.DMmotor(2,MotorMode["MIT_MODE"])
+Motor3 = Motor.DMmotor(3,MotorMode["MIT_MODE"])
 
 data_file_name = "aa1.csv"
 
@@ -62,37 +65,35 @@ def Motor_control_thread(_interface):
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
-        # #运动算法组件  
-        # global Motor1,Motor2,Motor3
-        # i=(int)((time.time()-t0)/dt)
-
-        # if i>0 and i<=n1:
-        #     k= 8
-        #     d= 1
-        #     # print(rpll.getJointAng(i))
-        #     Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
-        #     Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
-        #     Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
-        # else:# i>p:
-        #     k=8
-        #     d=1
-        #     # print(rpll.getJointAng(i))
-        #     Motor1.set(pll.getJointAng(i-n1)[0,0],0,k,d,0)
-        #     Motor2.set(pll.getJointAng(i-n1)[0,1],0,k,d,0)
-        #     Motor3.set(pll.getJointAng(i-n1)[0,2],0,k,d,0)
-
-
-        global Motor1
+        #运动算法组件  
+        global Motor1,Motor2,Motor3
         i=(int)((time.time()-t0)/dt)
-        if i>1000:
-            t_keep=0.4
-            p_fb=Motor1.feedback_pos
 
-            k=6
+        if i>0 and i<=n1:
+            k=5
+            d=0.5
+            Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
+            Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
+            Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
+        else:# i>p:
+            k=5
             d=0.5
 
-            p_des=t_keep/k+p_fb
-            Motor1.set(p_des,0,k,d,0)
+            F_limit=3*np.mat([1,0,0])
+            q_feedback=np.mat([Motor1.feedback_pos,Motor2.feedback_pos,Motor3.feedback_pos])
+            w_feedback=np.mat([Motor1.feedback_vel,Motor2.feedback_vel,Motor3.feedback_vel])
+            tao_feedback=np.mat([Motor1.feedback_torque,Motor2.feedback_torque,Motor3.feedback_torque])
+            tao_limit=pll.k.isk(q_feedback,F_limit)
+            
+            if Planer.overlimit(tao_limit,tao_feedback)!=0:
+                print("到阈值了")
+                print(tao_limit)
+                print(tao_feedback)
+
+
+            Motor1.set(pll.getJointAng(i-n1)[0,0],(pll.getJointAng(i+1-n1)[0,0]-pll.getJointAng(i-n1)[0,0])/dt,k,d,0)
+            Motor2.set(pll.getJointAng(i-n1)[0,1],(pll.getJointAng(i+1-n1)[0,1]-pll.getJointAng(i-n1)[0,1])/dt,k,d,0)
+            Motor3.set(pll.getJointAng(i-n1)[0,2],(pll.getJointAng(i+1-n1)[0,2]-pll.getJointAng(i-n1)[0,2])/dt,k,d,0)
 
 
 
@@ -101,12 +102,51 @@ def Motor_control_thread(_interface):
 
 
 
+        # ## 单电机恒力输出测试=================================================================
+        # ## 开环
+        # global Motor1
+        # i=(int)((time.time()-t0)/dt)
+        # if i>1000:
+        #     t_keep=0.4
+        #     p_fb=Motor1.feedback_pos
 
+        #     k=6
+        #     d=0.5
 
+        #     p_des=t_keep/k+p_fb
+        #     Motor1.set(p_des,0,k,d,0)
 
+        # # ## ====================================================================
 
+        # ## 单电机恒力输出测试=================================================================
+        # ## pid
+        # global Motor1
+        # i=(int)((time.time()-t0)/dt)
+        # if i<=1000:
+        #     integral=0.0
+        #     err_last=0.0
+        # elif i>1000:
+        #     t_keep=0.4
+        #     p_fb=Motor1.feedback_pos
+        #     t_fb=Motor1.feedback_torque
+        #     err=t_keep-t_fb
+        #     pp=1
+        #     ii=0.01
+        #     dd=0.1
 
+        #     integral+=err
+        #     derivative=err-err_last
+        #     t_ctr=pp*err+ii*integral+dd*derivative
 
+        #     k=6
+        #     d=0.5
+
+        #     p_des=t_ctr/k+p_fb
+        #     Motor1.set(p_des,0,k,d,0)
+
+        #     err_last=err
+
+        # # ## ====================================================================
 
 
 

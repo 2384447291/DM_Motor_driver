@@ -9,7 +9,9 @@ class kCalculator:
         return 0
     def jacobian():
         return 0
-    def isf():
+    def isk():
+        return 0
+    def fsk():
         return 0
 
 class planer:
@@ -23,39 +25,47 @@ class planer:
 class finger_link(kCalculator): # 带连杆的3R机械臂
     A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
     A_inv=np.linalg.inv(A)
+    B=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
+    B_inv=np.linalg.inv(B)
     def __init__(self,_arg) -> None:
         super().__init__()
         self.arg=_arg
         self.RRR=finger_RRR(_arg)
     def fk(self,q): 
-        q=np.reshape(q,[3,1])     # 电机角度
-        q=q+self.arg[0,3:6].T     # q_link = 电机角度+初始bias
-        q=self.A_inv@q            # q_RRR = A-1 @ q_link
+        q=np.reshape(q,[3,1])     # q0:电机角度
+        q=q+self.arg[0,3:6].T     # q2 = 电机角度+初始bias
+        q=self.A_inv@q            # q1 = A^-1 @ q2
         pos=self.RRR.fk(q)
         
         return pos
     def ik(self,px):
-        q=self.RRR.ik(px)         # q_RRR
+        q=self.RRR.ik(px)         # q1:RRR
         q=np.reshape(q,[3,1])
-        q=self.A@q                # q_link = A @ q_RRR
+        q=self.A@q                # q2 = A @ q1
         q=q-self.arg[0,3:6].T     #电机角度 = q_link - 初始bias
 
         q=np.reshape(q,[1,3])
         return q
     def jacobian(self,q):
-        q=np.reshape(q,[1,3])
-        q=q-self.arg[0,3:6]
+        q=np.reshape(q,[1,3])                           # q0
+        q=q+self.arg[0,3:6]                             # q2:link
 
-        q=np.reshape(q,[3,1]) # 开始矩阵运算 q1: 3*1
-        q2=(np.linalg.inv(self.A)@q) # q2: 3*1
-        J=self.RRR.jacobian(q2)@np.linalg.inv(self.A)
-        return J
+        q=np.reshape(q,[3,1])   
+        q1=(np.linalg.inv(self.A)@q)                    # q1:RRR
+        J=self.RRR.jacobian(q1)@np.linalg.inv(self.A)   # J2 = J1 * A^-1
+        return J                                        # return J2
     def isk(self,q,F):
         q=np.reshape(q,[3,1])
         F=np.reshape(F,[3,1])
-        tao=self.jacobian(q).T@F
+        tao=self.jacobian(q).T@F                        # t2 = J2.T @ F
         tao=np.reshape(tao,[1,3])
         return tao
+    def fsk(self,q,tao):
+        q=np.reshape(q,[3,1])
+        tao=np.reshape(tao,[3,1])
+        F=np.linalg.inv(self.jacobian(q).T)@tao         # F = (J2.T)^-1 @ t2
+        F=np.reshape(F,[1,3])
+        return F
 
 class finger_RRR(kCalculator): # 经典3R机械臂
     def __init__(self,_arg) -> None:
@@ -130,16 +140,15 @@ class finger_RRR(kCalculator): # 经典3R机械臂
         tao=self.jacobian(q).T@F
         tao=np.reshape(tao,[1,3])
         return tao
+    def fsk(self,q,tao):
+        q=np.reshape(q,[3,1])
+        tao=np.reshape(tao,[3,1])
+        F=np.linalg.inv(self.jacobian(q).T)@tao
+        F=np.reshape(F,[1,3])
+        return F
 
 
     
-
-
-class testik(kCalculator):
-    def __init__(self) -> None:
-        super().__init__()
-    def ik(self,px):
-        return px
 
 
 class testlineplaner(planer):
@@ -148,9 +157,9 @@ class testlineplaner(planer):
         self.n=_n
     def getPos(self,i:int):
         n=self.n
-        xx=50*np.ones([1,n])
-        yy=np.mat(np.linspace(-100,100,n))
-        zz=-30*np.ones([1,n])
+        xx=50*np.ones([1,n])/1000
+        yy=np.mat(np.linspace(-100,100,n))/1000
+        zz=-30*np.ones([1,n])/1000
 
         if i>0 and i<=n:
             pos=np.mat([xx[0,i-1],yy[0,i-1],zz[0,i-1]])
@@ -161,9 +170,9 @@ class testlineplaner(planer):
         return pos
     def getJointAng(self, i: int):
         if i>0 and i<=self.n:
-            q=self.k.ik(self.getPos(i))
+            q=self.k.ik(self.getPos(i))            
         elif i<=0:
-            q=np.mat([0,0,0])
+            q=np.mat([0,0,0])            
         else: # i>n
             q=self.k.ik(self.getPos(self.n))
         return q
@@ -204,18 +213,70 @@ class resetplaner(planer):
         return q
 
 
+class testcatchplaner(planer):
+    def __init__(self, _k: kCalculator,_n:int=10):
+        super().__init__(_k)
+        self.n=_n
+    def getPos(self,i:int):
+        n=self.n
+        
+        xx=np.mat(np.linspace(50,150,n))/1000
+        yy=np.zeros([1,n])/1000
+        zz=-10*np.ones([1,n])/1000
 
+        if i>0 and i<=n:
+            pos=np.mat([xx[0,i-1],yy[0,i-1],zz[0,i-1]])
+        elif i<=0:
+            pos=np.mat([0,0,0])
+        else: # i>n
+            pos=np.mat([xx[0,n-1],yy[0,n-1],zz[0,n-1]])
+        return pos
+    def getJointAng(self, i: int):
+        if i>0 and i<=self.n:
+            q=self.k.ik(self.getPos(i))
+        elif i<=0:
+            q=np.mat([0,0,0])
+        else: # i>n
+            q=self.k.ik(self.getPos(self.n))
+        return q
 
 
 
 
 def agree(p1,p2):
     b=1
+    p1=np.reshape(p1,[1,3])
+    p2=np.reshape(p2,[1,3])
+
     for i in range(3):
         if np.abs(p1[0,i]-p2[0,i])>1e-6: #值不相等
             b=0
             break
     return b    # b=0 for not agree; b!=0 for agree
+
+def overlimit(limit,feedback):
+    b=1
+    limit=np.reshape(limit,[1,3])
+    feedback=np.reshape(feedback,[1,3])
+
+    for i in range(3):
+        if limit[0,i] >= 0:
+            if feedback[0,i]<=limit[0,i]:
+                b=0
+                # print(feedback[0,i])
+                break
+        else:  # limit[0,i] < 0
+            if feedback[0,i]>limit[0,i]:
+                b=0
+                # print(feedback[0,i])
+                break
+    return b
+
+# arg=np.mat([0,100,100,0,0,0])
+# pll=testcatchplaner(finger_link(arg),10)
+# for i in range(12):
+#     # print(pll.getPos(i))
+#     print(pll.getJointAng(i))
 
 ## 测试复位planer 
 # rpll=resetplaner(np.mat([0.5,0.5,0.5]),10)
