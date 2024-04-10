@@ -22,51 +22,7 @@ class planer:
     def getJointAng(self,i:int):
         return 0
     
-class finger_link(kCalculator): # 带连杆的3R机械臂
-    A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
-    A_inv=np.linalg.inv(A)
-    B=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
-    B_inv=np.linalg.inv(B)
-    def __init__(self,_arg) -> None:
-        super().__init__()
-        self.arg=_arg
-        self.RRR=finger_RRR(_arg)
-    def fk(self,q): 
-        q=np.reshape(q,[3,1])     # q0:电机角度
-        q=q+self.arg[0,3:6].T     # q2 = 电机角度+初始bias
-        q=self.A_inv@q            # q1 = A^-1 @ q2
-        pos=self.RRR.fk(q)
-        
-        return pos
-    def ik(self,px):
-        q=self.RRR.ik(px)         # q1:RRR
-        q=np.reshape(q,[3,1])
-        q=self.A@q                # q2 = A @ q1
-        q=q-self.arg[0,3:6].T     #电机角度 = q_link - 初始bias
-
-        q=np.reshape(q,[1,3])
-        return q
-    def jacobian(self,q):
-        q=np.reshape(q,[1,3])                           # q0
-        q=q+self.arg[0,3:6]                             # q2:link
-
-        q=np.reshape(q,[3,1])   
-        q1=(np.linalg.inv(self.A)@q)                    # q1:RRR
-        J=self.RRR.jacobian(q1)@np.linalg.inv(self.A)   # J2 = J1 * A^-1
-        return J                                        # return J2
-    def isk(self,q,F):
-        q=np.reshape(q,[3,1])
-        F=np.reshape(F,[3,1])
-        tao=self.jacobian(q).T@F                        # t2 = J2.T @ F
-        tao=np.reshape(tao,[1,3])
-        return tao
-    def fsk(self,q,tao):
-        q=np.reshape(q,[3,1])
-        tao=np.reshape(tao,[3,1])
-        F=np.linalg.inv(self.jacobian(q).T)@tao         # F = (J2.T)^-1 @ t2
-        F=np.reshape(F,[1,3])
-        return F
-
+## 运动学求解器  ===============================================================================================
 class finger_RRR(kCalculator): # 经典3R机械臂
     def __init__(self,_arg) -> None:
         super().__init__()
@@ -147,11 +103,56 @@ class finger_RRR(kCalculator): # 经典3R机械臂
         F=np.reshape(F,[1,3])
         return F
 
+class finger_link(kCalculator): # 带连杆的3R机械臂
+    A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
+    A_inv=np.linalg.inv(A)
+    B=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
+    B_inv=np.linalg.inv(B)
+    def __init__(self,_arg) -> None:
+        super().__init__()
+        self.arg=_arg
+        self.RRR=finger_RRR(_arg)
+    def fk(self,q): 
+        q=np.reshape(q,[3,1])                           # q0:电机角度
+        q=q+self.arg[0,3:6].T                           # q2 = q0 + 初始bias    q2:link
+        q=self.A_inv@q                                  # q1 = A^-1 @ q2
+        pos=self.RRR.fk(q)
+        
+        return pos
+    def ik(self,px):
+        q=self.RRR.ik(px)                               # q1:RRR
+        q=np.reshape(q,[3,1])
+        q=self.A@q                                      # q2 = A @ q1
+        q=q-self.arg[0,3:6].T                           # q0 = q2 - 初始bias
+
+        q=np.reshape(q,[1,3])
+        return q
+    def jacobian(self,q):
+        q=np.reshape(q,[1,3])                           # q0
+        q=q+self.arg[0,3:6]                             # q2:link
+
+        q=np.reshape(q,[3,1])   
+        q1=(np.linalg.inv(self.A)@q)                    # q1:RRR
+        J=self.RRR.jacobian(q1)@np.linalg.inv(self.A)   # J2 = J1 * A^-1
+        return J                                        # return J2
+    def isk(self,q,F):
+        q=np.reshape(q,[3,1])
+        F=np.reshape(F,[3,1])
+        tao= self.jacobian(q).T @F                        # t2 = J2.T @ F
+        tao=np.reshape(tao,[1,3])
+        return tao
+    def fsk(self,q,tao):
+        q=np.reshape(q,[3,1])
+        tao=np.reshape(tao,[3,1])
+        F=np.linalg.inv(self.jacobian(q).T)@tao         # F = (J2.T)^-1 @ t2
+        F=np.reshape(F,[1,3])
+        return F
+
 
     
+## 规划器  =======================================================================================================
 
-
-class testlineplaner(planer):
+class testlineplaner(planer): # 随便跑一条直线（y方向/横向）
     def __init__(self, _k: kCalculator,_n:int=10):
         super().__init__(_k)
         self.n=_n
@@ -177,7 +178,7 @@ class testlineplaner(planer):
             q=self.k.ik(self.getPos(self.n))
         return q
 
-class arrayplaner(planer):
+class arrayplaner(planer): # 输入数组跑轨迹（数组来自matlab等）
     def __init__(self, _k: kCalculator,_arr:np.matrix):
         self.k=_k
         self.arr=_arr
@@ -199,7 +200,7 @@ class arrayplaner(planer):
             q=self.k.ik(self.getPos(self.n))
         return q
 
-class resetplaner(planer):
+class resetplaner(planer): # 复位模式，上电后到达某个点（下一段轨迹的起点）
     def __init__(self, _q:np.matrix,_n:int):
         self.q=_q
         self.n=_n
@@ -213,16 +214,16 @@ class resetplaner(planer):
         return q
 
 
-class testcatchplaner(planer):
+class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
     def __init__(self, _k: kCalculator,_n:int=10):
         super().__init__(_k)
         self.n=_n
     def getPos(self,i:int):
         n=self.n
         
-        xx=np.mat(np.linspace(50,150,n))/1000
+        xx=np.mat(np.linspace(-20,57,n))/1000
         yy=np.zeros([1,n])/1000
-        zz=-10*np.ones([1,n])/1000
+        zz=130*np.ones([1,n])/1000
 
         if i>0 and i<=n:
             pos=np.mat([xx[0,i-1],yy[0,i-1],zz[0,i-1]])
@@ -243,6 +244,7 @@ class testcatchplaner(planer):
 
 
 
+
 def agree(p1,p2):
     b=1
     p1=np.reshape(p1,[1,3])
@@ -255,21 +257,16 @@ def agree(p1,p2):
     return b    # b=0 for not agree; b!=0 for agree
 
 def overlimit(limit,feedback):
-    b=1
-    limit=np.reshape(limit,[1,3])
-    feedback=np.reshape(feedback,[1,3])
+    limit=np.reshape(limit,[3,1])
+    feedback=np.reshape(feedback,[3,1])
 
-    for i in range(3):
-        if limit[0,i] >= 0:
-            if feedback[0,i]<=limit[0,i]:
-                b=0
-                # print(feedback[0,i])
-                break
-        else:  # limit[0,i] < 0
-            if feedback[0,i]>limit[0,i]:
-                b=0
-                # print(feedback[0,i])
-                break
+    norm_limit=np.linalg.norm(limit)
+    shadow=np.linalg.norm(feedback.T@limit)/norm_limit
+
+    if shadow>=norm_limit and feedback.T@limit>=0:
+        b=1
+    else:
+        b=0
     return b
 
 # arg=np.mat([0,100,100,0,0,0])
