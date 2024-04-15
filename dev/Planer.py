@@ -2,24 +2,24 @@ import numpy as np
 import matplotlib.pyplot as plt  
 
 
-class kCalculator:
-    def ik():
+class kCalculator: # 运动学求解器类，不同构型对应运动学不同
+    def ik(): # 逆运动学
         return 0
-    def fk():
+    def fk(): # 正运动学
         return 0
-    def jacobian():
+    def jacobian(): # （速度）雅各比
         return 0
-    def isk():
+    def isk(): # 逆静力学
         return 0
-    def fsk():
+    def fsk(): # 正静力学
         return 0
 
-class planer:
+class planer: # 规划器类
     def __init__(self,_k:kCalculator):
         self.k=_k
-    def getPos(self,i:int):
+    def getPos(self,i:int): # 返回第i个规划的位置
         return 0
-    def getJointAng(self,i:int):
+    def getJointAng(self,i:int): # 返回第i个规划的位置对应的关节角
         return 0
     
 ## 运动学求解器  ===============================================================================================
@@ -106,8 +106,6 @@ class finger_RRR(kCalculator): # 经典3R机械臂
 class finger_link(kCalculator): # 带连杆的3R机械臂
     A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
     A_inv=np.linalg.inv(A)
-    B=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
-    B_inv=np.linalg.inv(B)
     def __init__(self,_arg) -> None:
         super().__init__()
         self.arg=_arg
@@ -115,7 +113,7 @@ class finger_link(kCalculator): # 带连杆的3R机械臂
     def fk(self,q): 
         q=np.reshape(q,[3,1])                           # q0:电机角度
         q=q+self.arg[0,3:6].T                           # q2 = q0 + 初始bias    q2:link
-        q=self.A_inv@q                                  # q1 = A^-1 @ q2
+        q=self.A_inv@q                                  # q1 = A^-1 @ q2        q1:RRR
         pos=self.RRR.fk(q)
         
         return pos
@@ -245,7 +243,7 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
 
 
 
-def agree(p1,p2):
+def agree(p1,p2): # 用于判断两个3维vector是否相等（用于检验正逆运动学算出的值是否正确）
     b=1
     p1=np.reshape(p1,[1,3])
     p2=np.reshape(p2,[1,3])
@@ -256,14 +254,15 @@ def agree(p1,p2):
             break
     return b    # b=0 for not agree; b!=0 for agree
 
-def overlimit(limit,feedback):
+def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
+                               # 当feedback在limit方向上的分量大于limit时，返回1；否则返回0
+                               # 用于判断接触力是否到达阈值
     limit=np.reshape(limit,[3,1])
     feedback=np.reshape(feedback,[3,1])
 
     norm_limit=np.linalg.norm(limit)
     shadow=np.linalg.norm(feedback.T@limit)/norm_limit
-
-    if shadow>=norm_limit and feedback.T@limit>=0:
+    if shadow>=norm_limit and feedback.T@limit>=0: # 投影模值大于limit的模值 且 同向
         b=1
     else:
         b=0
