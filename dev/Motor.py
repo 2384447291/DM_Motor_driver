@@ -70,7 +70,7 @@ class DMmotor(object):
         self.control_k_p = 0.0
         self.control_k_d = 0.0
         self.control_torque = 0.0
-
+        
     def enable_motor(self):
         global global_CanMsgCenter
         buf = np.array([self.id,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xfc],np.uint8)

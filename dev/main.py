@@ -7,6 +7,7 @@ import Motor
 import Planer
 #你最爱的np
 import numpy as np 
+from enum import Enum
 
 #绘图组件
 import matplotlib
@@ -31,53 +32,269 @@ freq_every = 0
 
 #挂墙时钟
 t0 = 0.0
-dt=0.0001
+dt = 0.001
 last_sample_time = 0
 have_head = False
 
 # 机器人参数和规划器
-arg=np.mat([0,100,100,0,0,20.49])
-n1=30000
-n2=3000
-pll=Planer.testlineplaner(Planer.fingerik(arg),n2)
-rpll=Planer.resetplaner(pll.getJointAng(1),n1)
+arg = np.mat([0,0.100,0.092,0,0,-23.58/180*np.pi]) # l:[m], theta:[rad]
+nt = 0                  # 中间用来计时的变量
+n1 = 1000
+n2 = 500
+pll = Planer.testcatchplaner(Planer.finger_link(arg),n2)
+# pll = Planer.testlineplaner(Planer.finger_link(arg),n2)
+rpll = Planer.resetplaner(pll.getJointAng(1),n1)
+
+integral=0.0
+err_last=0.0
 
 #是否需要打开图像
-is_need_plot = False  
+is_need_plot = True  
 is_need_check_freq = False
-is_need_save_data = True
+is_need_save_data = False
 sample_time = 0.01
 
 #定义电机(注册4个以上电机UI会爆，懒得修了，你自己手动改吧)
-Motor1 = Motor.DMmotor(1,MotorMode["MIT_MODE"])
+# Motor1 = Motor.DMmotor(1,MotorMode["MIT_MODE"])
 Motor2 = Motor.DMmotor(2,MotorMode["MIT_MODE"])
 Motor3 = Motor.DMmotor(3,MotorMode["MIT_MODE"])
+# Motor4 = Motor.DMmotor(4,MotorMode["MIT_MODE"])
+Motor5 = Motor.DMmotor(5,MotorMode["MIT_MODE"])
+Motor6 = Motor.DMmotor(6,MotorMode["MIT_MODE"])
+
 
 data_file_name = "aa1.csv"
 
+class ctrlMode(Enum):
+    reset=1
+    plan=2
+    hold=3
+    recongnition=4
+    catch=5
+    wait=6
+
 def Motor_control_thread(_interface):
+    mode=ctrlMode.reset
     while True:
         #在这里写代码//不要动t0很危险
         #-----------------------------------------------------------------------------------------------------------        
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
+        
+        
+        
         #运动算法组件  
-        global Motor1,Motor2,Motor3
+        global Motor2,Motor3,Motor5,Motor6
         i=(int)((time.time()-t0)/dt)
 
+        ## ====================================状态机状态切换====================================
         if i>0 and i<=n1:
-            k= 8
-            d= 1.5
-            Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
+            mode=ctrlMode.reset
+        else:# i>p:
+            q_feedback_left=np.mat([0,Motor2.feedback_pos,Motor3.feedback_pos])
+            tao_feedback_left=np.mat([0,Motor2.feedback_torque,Motor3.feedback_torque])
+            F_feedback_left=pll.k.fsk(q_feedback_left,tao_feedback_left)
+            
+            q_feedback_right=np.mat([0,Motor5.feedback_pos,Motor6.feedback_pos])
+            tao_feedback_right=np.mat([0,Motor5.feedback_torque,Motor6.feedback_torque])
+            F_feedback_right=pll.k.fsk(q_feedback_right,tao_feedback_right)
+
+            if mode==ctrlMode.reset:
+                mode=ctrlMode.wait            # 完成复位后，切换到wait
+                # mode=ctrlMode.plan          # 完成复位后，切换到plan
+                # mode=ctrlMode.recongnition  # 识别模式
+            elif mode==ctrlMode.wait:
+                F_limit=5*np.mat([0,0,1]) # 接触力限制：判断是否接触
+
+                tao_limit_left=pll.k.isk(q_feedback_left,F_limit)
+                tao_limit_right=pll.k.isk(q_feedback_right,F_limit)
+                if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                    time.sleep(0.01)
+                    if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                    # print('到达阈值,mode=catch')
+                    # print(F_feedback)
+                        mode=ctrlMode.catch
+                        nt=i
+            elif mode==ctrlMode.catch:
+                F_limit=6*np.mat([1,0,0]) # 接触力限制：判断是否接触
+
+                tao_limit_left=pll.k.isk(q_feedback_left,F_limit)
+                tao_limit_right=pll.k.isk(q_feedback_right,F_limit)
+                if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                    time.sleep(0.01)
+                    if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                        # print('到达阈值,mode=hold')
+                        # print(F_feedback)
+                        mode=ctrlMode.hold
+        ## ====================================状态机状态切换====================================
+
+        ## ====================================不同状态的运动控制====================================
+        if mode==ctrlMode.reset:
+            k=5
+            d=0.5
+            # Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
             Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
             Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
-        else:# i>p:
-            k=10
-            d=1.1
-            Motor1.set(pll.getJointAng(i-n1)[0,0],0,k,d,0)
-            Motor2.set(pll.getJointAng(i-n1)[0,1],0,k,d,0)
-            Motor3.set(pll.getJointAng(i-n1)[0,2],0,k,d,0)
+            # Motor4.set(rpll.getJointAng(i)[0,0],0,k,d,0)
+            Motor5.set(rpll.getJointAng(i)[0,1],0,k,d,0)
+            Motor6.set(rpll.getJointAng(i)[0,2],0,k,d,0)
+        elif mode==ctrlMode.catch:
+            # print('夹紧中')
+            k=8
+            d=0.5
+            # Motor1.set(pll.getJointAng(i-nt)[0,0],(pll.getJointAng(i+1-nt)[0,0]-pll.getJointAng(i-nt)[0,0])/dt,k,d,0)
+            Motor2.set(pll.getJointAng(i-nt)[0,1],(pll.getJointAng(i+1-nt)[0,1]-pll.getJointAng(i-nt)[0,1])/dt,k,d,0)
+            Motor3.set(pll.getJointAng(i-nt)[0,2],(pll.getJointAng(i+1-nt)[0,2]-pll.getJointAng(i-nt)[0,2])/dt,k,d,0)
+            # Motor4.set(pll.getJointAng(i-nt)[0,0],(pll.getJointAng(i+1-nt)[0,0]-pll.getJointAng(i-nt)[0,0])/dt,k,d,0)
+            Motor5.set(pll.getJointAng(i-nt)[0,1],(pll.getJointAng(i+1-nt)[0,1]-pll.getJointAng(i-nt)[0,1])/dt,k,d,0)
+            Motor6.set(pll.getJointAng(i-nt)[0,2],(pll.getJointAng(i+1-nt)[0,2]-pll.getJointAng(i-nt)[0,2])/dt,k,d,0)
+
+        elif mode==ctrlMode.hold:
+            # print("hold")
+            k=8
+            d=0.5
+
+            F_hold=6*np.mat([1,0,0]) # 保持的夹持力            
+
+            tao_hold_left=pll.k.isk(q_feedback_left,F_hold)
+            tao_hold_right=pll.k.isk(q_feedback_right,F_hold)
+            q_des_left=tao_hold_left/k+q_feedback_left
+            q_des_right=tao_hold_right/k+q_feedback_right
+
+            # Motor1.set(q_des[0,0],0,k,d,0)
+            Motor2.set(q_des_left[0,1],0,k,d,0)
+            Motor3.set(q_des_left[0,2],0,k,d,0)
+            # Motor4.set(q_des[0,0],0,k,d,0)
+            Motor5.set(q_des_right[0,1],0,k,d,0)
+            Motor6.set(q_des_right[0,2],0,k,d,0)
+            print(F_feedback_left)
+            print(F_feedback_right)
+        ## ====================================不同状态的运动控制====================================
+
+        # elif mode==ctrlMode.recongnition: ## 单电机力识别模式
+        #     k=1
+        #     d=0.5
+            
+        #     q_feedback=np.mat([0,Motor2.feedback_pos,Motor3.feedback_pos])
+        #     tao_feedback=np.mat([0,Motor2.feedback_torque,Motor3.feedback_torque])
+        #     F_feedback=pll.k.fsk(q_feedback,tao_feedback)
+
+        #     # Motor1.set(q_feedback[0,0],0,k,d,0)
+        #     Motor2.set(q_feedback[0,1],0,k,d,0)
+        #     Motor3.set(q_feedback[0,2],0,k,d,0)
+        #     # Motor4.set(q_feedback[0,0],0,k,d,0)
+        #     Motor5.set(q_feedback[0,1],0,k,d,0)
+        #     Motor6.set(q_feedback[0,2],0,k,d,0)
+        #     print(F_feedback)
+        
+        # elif mode==ctrlMode.plan: ## 单指测试力控功能
+        #     k=5
+        #     d=0.5
+
+        #     F_limit=-4*np.mat([0,0,1]) # 接触力限制：判断是否接触
+
+        #     q_feedback=np.mat([Motor1.feedback_pos,Motor2.feedback_pos,Motor3.feedback_pos])
+        #     tao_feedback=np.mat([Motor1.feedback_torque,Motor2.feedback_torque,Motor3.feedback_torque])
+        #     tao_limit=pll.k.isk(q_feedback,F_limit)
+        #     F_feedback=pll.k.fsk(q_feedback,tao_feedback)
+            
+        #     if Planer.overlimit(tao_limit,tao_feedback)!=0:
+        #         time.sleep(0.01)
+        #         if Planer.overlimit(tao_limit,tao_feedback)!=0:
+        #             # print('到达阈值,mode=hold')
+        #             # print(F_feedback)
+        #             mode=ctrlMode.hold
+        #     else:
+        #         Motor1.set(pll.getJointAng(i-n1)[0,0],(pll.getJointAng(i+1-n1)[0,0]-pll.getJointAng(i-n1)[0,0])/dt,k,d,0)
+        #         Motor2.set(pll.getJointAng(i-n1)[0,1],(pll.getJointAng(i+1-n1)[0,1]-pll.getJointAng(i-n1)[0,1])/dt,k,d,0)
+        #         Motor3.set(pll.getJointAng(i-n1)[0,2],(pll.getJointAng(i+1-n1)[0,2]-pll.getJointAng(i-n1)[0,2])/dt,k,d,0)
+
+
+
+
+        # ## 单电机恒力输出测试=================================================================
+        # ## 开环
+            
+        # global Motor1
+        # i=(int)((time.time()-t0)/dt)
+        # if i>1000:
+        #     t_keep=0.4
+        #     p_fb=Motor1.feedback_pos
+
+        #     k=6
+        #     d=0.5
+
+        #     p_des=t_keep/k+p_fb
+        #     Motor1.set(p_des,0,k,d,0)
+
+        # # ## ====================================================================
+
+        # ## 单电机恒力输出测试=================================================================
+        # ## pid
+            
+        # global Motor1
+        # i=(int)((time.time()-t0)/dt)
+        # if i<=1000:
+        #     integral=0.0
+        #     err_last=0.0
+        # elif i>1000:
+        #     t_keep=0.4
+        #     p_fb=Motor1.feedback_pos
+        #     t_fb=Motor1.feedback_torque
+        #     err=t_keep-t_fb
+        #     pp=1
+        #     ii=0.01
+        #     dd=0.1
+
+        #     integral+=err
+        #     derivative=err-err_last
+        #     t_ctr=pp*err+ii*integral+dd*derivative
+
+        #     k=6
+        #     d=0.5
+
+        #     p_des=t_ctr/k+p_fb
+        #     Motor1.set(p_des,0,k,d,0)
+
+        #     err_last=err
+
+        # # ## ====================================================================
+
+
+
+        # # 单指速度规划测试=================================================================
+        # if i>0 and i<=n1:
+        #     k= 8
+        #     d= 1
+        #     # print(rpll.getJointAng(i))
+        #     Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
+        #     Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
+        #     Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
+        # else:# i>p:
+        #     k=3
+        #     d=1.2
+        #     # print(rpll.getJointAng(i))
+
+        #     # Motor1.set(pll.getJointAng(i-n1)[0,0],0,k,d,0)
+        #     # Motor2.set(pll.getJointAng(i-n1)[0,1],0,k,d,0)
+        #     # Motor3.set(pll.getJointAng(i-n1)[0,2],0,k,d,0)
+        #     Motor1.set(pll.getJointAng(i-n1)[0,0],(pll.getJointAng(i+1-n1)[0,0]-pll.getJointAng(i-n1)[0,0])/dt,k,d,0)
+        #     Motor2.set(pll.getJointAng(i-n1)[0,1],(pll.getJointAng(i+1-n1)[0,1]-pll.getJointAng(i-n1)[0,1])/dt,k,d,0)
+        #     Motor3.set(pll.getJointAng(i-n1)[0,2],(pll.getJointAng(i+1-n1)[0,2]-pll.getJointAng(i-n1)[0,2])/dt,k,d,0)
+
+        # # =================================================================
+
+
+
+
+
+
+
+
+
+
+
         #在这里写代码
         #-----------------------------------------------------------------------------------------------------------        
         #-----------------------------------------------------------------------------------------------------------  
@@ -223,7 +440,7 @@ if __name__ == '__main__' :
         datalock = Lock()
         root = Tk()
         root.title("Set title")
-        root.geometry('1000x500')
+        root.geometry('1000x700')
         
         """
         图像画布设置
