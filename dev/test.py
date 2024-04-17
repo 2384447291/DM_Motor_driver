@@ -1,32 +1,36 @@
+import csv
 import numpy as np
-import Planer
+import serial
+import serial.tools.list_ports
+import numpy as np
+import struct
+import time
+import queue
+from enum import Enum
+import sys
+# buf=np.zeros((9,1),np.uint8)    
+# buf[0] = 1.1
+# a = -2.8
 
-# A=np.mat([[1,0,0],[0,1,0],[0,-1,-1]])
-# B=np.mat([3,4,5])
-# C=np.mat([[1],[2],[3]])
+# send_data = 0x200 >> 8
+# print(send_data)
+# send_data = 0x200 & 0xFF 
+# print(send_data)
 
-# d1=np.reshape(B,[3,1])
-# d2=np.reshape(C,[3,1])
+ports_list = list(serial.tools.list_ports.comports())  
+plist = list(serial.tools.list_ports.comports())
+if len(plist) <= 0:
+    print("The Serial port can't find!")
+    print('program end')
+    sys.exit(0) 
+else:
+    for port in plist:
+        uart_2_str = str(port)
+        print(uart_2_str)
+        uart_name_list = uart_2_str.split()
+        print(uart_name_list)
 
-# print(d1)
-# print(d2)
-# print(B[0,1:3].T)
 
-
-A=np.mat([1,0,0])
-B=np.mat([3,4,5])
-C=np.mat([[-1],[2],[3]])
-
-
-limit=-1*np.mat([3,4,5])
-feedback=np.mat([[-1],[2],[3]])
-
-limit=np.reshape(limit,[3,1])
-feedback=np.reshape(feedback,[3,1])
-
-print(Planer.overlimit(-1*C,B))
-print(limit[0,0]*feedback[0,0]+limit[1,0]*feedback[1,0]+limit[2,0]*feedback[2,0])
-print(feedback.T@limit>=0)
 
 
 

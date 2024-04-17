@@ -219,7 +219,7 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
     def getPos(self,i:int):
         n=self.n
         
-        xx=np.mat(np.linspace(-5,57,n))/1000
+        xx=np.mat(np.linspace(-20,57,n))/1000
         yy=np.zeros([1,n])/1000
         zz=130*np.ones([1,n])/1000
 
@@ -329,3 +329,8 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
 # pll=arrayplaner(finger_RRR(arg),pp)
 # for i in range(12):
 #     print(pll.getJointAng(i))
+
+
+
+
+

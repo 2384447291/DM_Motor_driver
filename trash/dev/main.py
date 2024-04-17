@@ -1,12 +1,9 @@
 #电机通讯的必要组件
 from Communication import CanMsgCenter
 from Communication import USB2CAN
-from Communication import global_CanMsgCenter
-from DjiMotorCommander import global_DjiMsgCenter
-import Motor
 from Motor import MotorMode
-import DjiMotor
-from DjiMotor import DjiMotorMode
+from Communication import global_CanMsgCenter
+import Motor
 import Planer
 #你最爱的np
 import numpy as np 
@@ -35,7 +32,7 @@ freq_every = 0
 
 #挂墙时钟
 t0 = 0.0
-dt=0.0001
+dt = 0.001
 last_sample_time = 0
 have_head = False
 
@@ -53,17 +50,18 @@ err_last=0.0
 
 #是否需要打开图像
 is_need_plot = False
-is_need_check_freq = True
+is_need_check_freq = False
 is_need_save_data = False
 sample_time = 0.01
 
 #定义电机(注册4个以上电机UI会爆，懒得修了，你自己手动改吧)
+# Motor1 = Motor.DMmotor(1,MotorMode["MIT_MODE"])
 Motor2 = Motor.DMmotor(2,MotorMode["MIT_MODE"])
 Motor3 = Motor.DMmotor(3,MotorMode["MIT_MODE"])
+# Motor4 = Motor.DMmotor(4,MotorMode["MIT_MODE"])
 Motor5 = Motor.DMmotor(5,MotorMode["MIT_MODE"])
 Motor6 = Motor.DMmotor(6,MotorMode["MIT_MODE"])
-MotorUp = DjiMotor.Djimotor(1,DjiMotorMode["SPEED_MODE"])
-Motorposition_remember = 0.0
+
 
 data_file_name = "aa1.csv"
 
@@ -75,22 +73,23 @@ class ctrlMode(Enum):
     catch=5
     wait=6
 
-def Motor_control_thread(_interface_DM,_interface_DJI):
+def Motor_control_thread(_interface):
+    mode=ctrlMode.reset
     while True:
+        # time.sleep(0.001)
         #在这里写代码//不要动t0很危险
         #-----------------------------------------------------------------------------------------------------------        
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
         #-----------------------------------------------------------------------------------------------------------  
+        
+        
+        
         #运动算法组件  
-        global Motor2,Motor3,Motor5,Motor6,MotorUp
-        #抬升电机
-        MotorUp.pidSpeed.kp = 3
-        MotorUp.pidSpeed.maxOut = 10
-        # MotorUp.speedSet = 0
-        #手指电机
+        global Motor2,Motor3,Motor5,Motor6
         i=(int)((time.time()-t0)/dt)
-        ## ====================================状态机状态切换====================================
+
+        # ## ====================================状态机状态切换====================================
         if i>0 and i<=n1:
             mode=ctrlMode.reset
         else:# i>p:
@@ -107,11 +106,12 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
                 # mode=ctrlMode.plan          # 完成复位后，切换到plan
                 # mode=ctrlMode.recongnition  # 识别模式
             elif mode==ctrlMode.wait:
-                F_limit=5*np.mat([0,0,1]) # 接触力限制：判断是否接触
+                F_limit=3*np.mat([0,0,1]) # 接触力限制：判断是否接触
 
                 tao_limit_left=pll.k.isk(q_feedback_left,F_limit)
                 tao_limit_right=pll.k.isk(q_feedback_right,F_limit)
                 if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                    time.sleep(0.01)
                     if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
                     # print('到达阈值,mode=catch')
                     # print(F_feedback)
@@ -123,27 +123,24 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
                 tao_limit_left=pll.k.isk(q_feedback_left,F_limit)
                 tao_limit_right=pll.k.isk(q_feedback_right,F_limit)
                 if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
+                    time.sleep(0.01)
                     if Planer.overlimit(tao_limit_left,tao_feedback_left)!=0 and Planer.overlimit(tao_limit_right,tao_feedback_right)!=0:
                         # print('到达阈值,mode=hold')
                         # print(F_feedback)
                         mode=ctrlMode.hold
-        ## ====================================状态机状态切换====================================
+        # ## ====================================状态机状态切换====================================
 
-        ## ====================================不同状态的运动控制====================================
+        # ## ====================================不同状态的运动控制====================================
         if mode==ctrlMode.reset:
             k=5
             d=0.5
             # Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
             Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
             Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
-            # Motor4.set(rpll.getJointAng(i)[0,0],0,k,d,0z
+            # Motor4.set(rpll.getJointAng(i)[0,0],0,k,d,0)
             Motor5.set(rpll.getJointAng(i)[0,1],0,k,d,0)
             Motor6.set(rpll.getJointAng(i)[0,2],0,k,d,0)
-        elif mode == ctrlMode.wait:
-            MotorUp.speedSet = -3
         elif mode==ctrlMode.catch:
-            Motorposition_remember = MotorUp.positionFdb
-            MotorUp.speedSet = 0
             # print('夹紧中')
             k=8
             d=0.5
@@ -155,10 +152,6 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
             Motor6.set(pll.getJointAng(i-nt)[0,2],(pll.getJointAng(i+1-nt)[0,2]-pll.getJointAng(i-nt)[0,2])/dt,k,d,0)
 
         elif mode==ctrlMode.hold:
-            if MotorUp.positionFdb - Motorposition_remember > 8*3.1415926:
-                MotorUp.speedSet = 0
-            else:
-                MotorUp.speedSet = 20                
             # print("hold")
             k=8
             d=0.5
@@ -176,10 +169,9 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
             # Motor4.set(q_des[0,0],0,k,d,0)
             Motor5.set(q_des_right[0,1],0,k,d,0)
             Motor6.set(q_des_right[0,2],0,k,d,0)
-            # print(F_feedback_left)
-            # print(F_feedback_right)
-
-        ## ====================================不同状态的运动控制====================================
+            print(F_feedback_left)
+            print(F_feedback_right)
+        # ## ====================================不同状态的运动控制====================================
 
         # elif mode==ctrlMode.recongnition: ## 单电机力识别模式
         #     k=1
@@ -192,9 +184,9 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
         #     # Motor1.set(q_feedback[0,0],0,k,d,0)
         #     Motor2.set(q_feedback[0,1],0,k,d,0)
         #     Motor3.set(q_feedback[0,2],0,k,d,0)
-        #     # Motor4.set(q_feedback[0,0],0,k,d,0)
-        #     Motor5.set(q_feedback[0,1],0,k,d,0)
-        #     Motor6.set(q_feedback[0,2],0,k,d,0)
+        #     # # Motor4.set(q_feedback[0,0],0,k,d,0)
+        #     # Motor5.set(q_feedback[0,1],0,k,d,0)
+        #     # Motor6.set(q_feedback[0,2],0,k,d,0)
         #     print(F_feedback)
         
         # elif mode==ctrlMode.plan: ## 单指测试力控功能
@@ -272,12 +264,14 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
 
 
 
-        # # 单指速度规划测试=================================================================
+        # # # 单指速度规划测试=================================================================
+        # global Motor2,Motor3,Motor5,Motor6
+        # i=(int)((time.time()-t0)/dt)
         # if i>0 and i<=n1:
         #     k= 8
         #     d= 1
         #     # print(rpll.getJointAng(i))
-        #     Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
+        #     # Motor1.set(rpll.getJointAng(i)[0,0],0,k,d,0)
         #     Motor2.set(rpll.getJointAng(i)[0,1],0,k,d,0)
         #     Motor3.set(rpll.getJointAng(i)[0,2],0,k,d,0)
         # else:# i>p:
@@ -288,11 +282,21 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
         #     # Motor1.set(pll.getJointAng(i-n1)[0,0],0,k,d,0)
         #     # Motor2.set(pll.getJointAng(i-n1)[0,1],0,k,d,0)
         #     # Motor3.set(pll.getJointAng(i-n1)[0,2],0,k,d,0)
-        #     Motor1.set(pll.getJointAng(i-n1)[0,0],(pll.getJointAng(i+1-n1)[0,0]-pll.getJointAng(i-n1)[0,0])/dt,k,d,0)
+        #     # Motor1.set(pll.getJointAng(i-n1)[0,0],(pll.getJointAng(i+1-n1)[0,0]-pll.getJointAng(i-n1)[0,0])/dt,k,d,0)
         #     Motor2.set(pll.getJointAng(i-n1)[0,1],(pll.getJointAng(i+1-n1)[0,1]-pll.getJointAng(i-n1)[0,1])/dt,k,d,0)
         #     Motor3.set(pll.getJointAng(i-n1)[0,2],(pll.getJointAng(i+1-n1)[0,2]-pll.getJointAng(i-n1)[0,2])/dt,k,d,0)
 
-        # # =================================================================
+        # # # =================================================================
+
+
+
+
+
+
+
+
+
+
 
         #在这里写代码
         #-----------------------------------------------------------------------------------------------------------        
@@ -319,11 +323,8 @@ def Motor_control_thread(_interface_DM,_interface_DJI):
         if is_need_check_freq:
             print(freq)
         #收发信息的驱动
-        global_CanMsgCenter.UpdateMassage(_interface_DM)
-        global_CanMsgCenter.RecieveMassage(_interface_DM) 
-
-        global_DjiMsgCenter.UpdateMassage(_interface_DJI)
-        global_DjiMsgCenter.RecieveMassage(_interface_DJI) 
+        is_sending = global_CanMsgCenter.UpdateMassage(_interface)
+        global_CanMsgCenter.RecieveMassage(_interface) 
         global last_sample_time
         if is_need_save_data:
             global have_head
@@ -425,11 +426,10 @@ if __name__ == '__main__' :
     #挂墙时间
     t0 = time.time()
     #定义USB
-    m_USB_DM = USB2CAN("COM3")
-    m_USB_Dji = USB2CAN("COM4")
+    m_USB = USB2CAN()
     if is_need_plot:
         #开启电机控制线程
-        Motor_threading=threading.Thread(target=Motor_control_thread,args=[m_USB_DM,m_USB_Dji],name='Motor_control_thread')
+        Motor_threading=threading.Thread(target=Motor_control_thread,args=[m_USB],name='Motor_control_thread')
         Motor_threading.daemon = True
         Motor_threading.start()   
         #---------------------------------------------------画图----------------------------------------------
@@ -443,7 +443,7 @@ if __name__ == '__main__' :
         datalock = Lock()
         root = Tk()
         root.title("Set title")
-        root.geometry('1000x500')
+        root.geometry('1000x700')
         
         """
         图像画布设置
@@ -460,5 +460,5 @@ if __name__ == '__main__' :
         video_loop()
         root.mainloop()
     else:
-        Motor_control_thread(m_USB_DM,m_USB_Dji)
+        Motor_control_thread(m_USB)
         

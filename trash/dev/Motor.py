@@ -46,7 +46,6 @@ def uint_to_float(x_int,x_min, x_max,bits):
     span=x_max-x_min
     offset=x_min
     return float(x_int*span/((1<<bits)-1)+offset)
-
 def LIMIT_MIN_MAX(x,min,max):
     if x<=min:
         x=min
@@ -71,7 +70,7 @@ class DMmotor(object):
         self.control_k_p = 0.0
         self.control_k_d = 0.0
         self.control_torque = 0.0
-
+        
     def enable_motor(self):
         global global_CanMsgCenter
         buf = np.array([self.id,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xfc],np.uint8)
