@@ -219,7 +219,7 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
     def getPos(self,i:int):
         n=self.n
         
-        xx=np.mat(np.linspace(-5,57,n))/1000
+        xx=np.mat(np.linspace(10,57,n))/1000
         yy=np.zeros([1,n])/1000
         zz=130*np.ones([1,n])/1000
 
@@ -260,12 +260,16 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
     limit=np.reshape(limit,[3,1])
     feedback=np.reshape(feedback,[3,1])
 
-    norm_limit=np.linalg.norm(limit)
-    shadow=np.linalg.norm(feedback.T@limit)/norm_limit
-    if shadow>=norm_limit and feedback.T@limit>=0: # 投影模值大于limit的模值 且 同向
-        b=1
-    else:
+    if np.abs(feedback[0,0])>10 or np.abs(feedback[1,0])>10 or np.abs(feedback[2,0])>10:
         b=0
+        print(feedback)
+    else:
+        norm_limit=np.linalg.norm(limit)
+        shadow=np.linalg.norm(feedback.T@limit)/norm_limit
+        if shadow>=norm_limit and feedback.T@limit>=0: # 投影模值大于limit的模值 且 同向
+            b=1
+        else:
+            b=0
     return b
 
 # arg=np.mat([0,100,100,0,0,0])
@@ -290,10 +294,11 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
 # k=finger_RRR(arg)
 # # print(k.ik(px))
 # # print(k.fk(k.ik(px)))
-# lplr=testlineplaner(k,10)
-# for i in range(12):
-#     # q=lplr.getJointAng(i)
-#     # print(q)
+# lplr=testcatchplaner(k,100)
+# for i in range(100):
+#     # print(lplr.getPos(i))
+#     q=lplr.getJointAng(i)
+#     print(q)
 #     # j=k.jacobian(q)   #测v2的jacob
 #     # print(j)          #测v2的jacob
 #     # jj=k1.jacobian(q) #测v1的jacob
