@@ -234,7 +234,7 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
         if i>0 and i<=self.n:
             q=self.k.ik(self.getPos(i))
         elif i<=0:
-            q=np.mat([0,0,0])
+            q=self.k.ik(self.getPos(1))
         else: # i>n
             q=self.k.ik(self.getPos(self.n))
         return q
@@ -286,16 +286,16 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
 ## =====================================================================
 
 # ## 机器人数据
-# arg=np.mat([0,100,100,0,0,0])
-# px=np.mat([198,0,0])
+arg=np.mat([0,100,100,0,0,0])
+px=np.mat([198,0,0])
 # ## =====================================================================
 # ## 测试直线plr，用v2的正逆运动学
 # k1=finger_link(arg) #测v1
 # k=finger_RRR(arg)
 # # print(k.ik(px))
 # # print(k.fk(k.ik(px)))
-# lplr=testcatchplaner(k,100)
-# for i in range(100):
+# lplr=testcatchplaner(k,10)
+# for i in range(12):
 #     # print(lplr.getPos(i))
 #     q=lplr.getJointAng(i)
 #     print(q)
