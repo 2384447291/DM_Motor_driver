@@ -238,8 +238,70 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
         else: # i>n
             q=self.k.ik(self.getPos(self.n))
         return q
+class testsquareplaner(planer): # 矩形路径规划
+    def __init__(self, _k: kCalculator,_n:int=10):
+        super().__init__(_k)
+        self.n=_n
+    def getPos(self,i:int):
+        n=int(self.n/4)*4
+        l=int(n/4)
+        zz=20*np.ones([1,n])/1000
+
+        x1=np.mat(np.linspace(50,150,l))/1000
+        x2=150*np.ones([1,l])/1000
+        x3=np.mat(np.linspace(150,50,l))/1000
+        x4=50*np.ones([1,l])/1000
+        xx=np.hstack([x1,x2,x3,x4])
+
+        y1=-50*np.ones([1,l])/1000
+        y2=np.mat(np.linspace(-50,50,l))/1000
+        y3=50*np.ones([1,l])/1000
+        y4=np.mat(np.linspace(50,-50,l))/1000
+        yy=np.hstack([y1,y2,y3,y4])
 
 
+        if i>0 and i<=n:
+            pos=np.mat([xx[0,i-1],yy[0,i-1],zz[0,i-1]])
+        elif i<=0:
+            pos=np.mat([0,0,0])
+        else: # i>n
+            pos=np.mat([xx[0,n-1],yy[0,n-1],zz[0,n-1]])
+        return pos
+    def getJointAng(self, i: int):
+        if i>0 and i<=self.n:
+            q=self.k.ik(self.getPos(i))            
+        elif i<=0:
+            q=self.k.ik(self.getPos(1))           
+        else: # i>n
+            q=self.k.ik(self.getPos(self.n))
+        return q
+
+class motortestplaner(planer): # 测试电机动态特性用
+    def __init__(self,_n:int=10):
+        self.n=_n
+    def getStepJointAng(self, i: int):
+        n=self.n
+        ang=np.linspace(0,1,n)
+        if i>=0 and i<self.n:
+            q=ang[i]         
+        elif i<0:
+            q=ang[0]           
+        else: # i>=n
+            q=ang[n-1] 
+        return q
+    def getPulseJointAng(self, i: int):
+        n=int(self.n/2)*2
+        l=int(n/2)
+        ang1=np.linspace(0,1,l)
+        ang2=np.linspace(1,0,l)
+        ang=np.hstack([ang1,ang2])
+        if i>=0 and i<self.n:
+            q=ang[i]         
+        elif i<0:
+            q=ang[0]           
+        else: # i>=n
+            q=ang[n-1] 
+        return q
 
 
 
