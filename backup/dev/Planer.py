@@ -219,7 +219,7 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
     def getPos(self,i:int):
         n=self.n
         
-        xx=np.mat(np.linspace(10,57,n))/1000
+        xx=np.mat(np.linspace(-20,57,n))/1000
         yy=np.zeros([1,n])/1000
         zz=130*np.ones([1,n])/1000
 
@@ -234,74 +234,12 @@ class testcatchplaner(planer): # 单指，跑一条直线（x方向/纵向）
         if i>0 and i<=self.n:
             q=self.k.ik(self.getPos(i))
         elif i<=0:
-            q=self.k.ik(self.getPos(1))
-        else: # i>n
-            q=self.k.ik(self.getPos(self.n))
-        return q
-class testsquareplaner(planer): # 矩形路径规划
-    def __init__(self, _k: kCalculator,_n:int=10):
-        super().__init__(_k)
-        self.n=_n
-    def getPos(self,i:int):
-        n=int(self.n/4)*4
-        l=int(n/4)
-        zz=20*np.ones([1,n])/1000
-
-        x1=np.mat(np.linspace(50,150,l))/1000
-        x2=150*np.ones([1,l])/1000
-        x3=np.mat(np.linspace(150,50,l))/1000
-        x4=50*np.ones([1,l])/1000
-        xx=np.hstack([x1,x2,x3,x4])
-
-        y1=-50*np.ones([1,l])/1000
-        y2=np.mat(np.linspace(-50,50,l))/1000
-        y3=50*np.ones([1,l])/1000
-        y4=np.mat(np.linspace(50,-50,l))/1000
-        yy=np.hstack([y1,y2,y3,y4])
-
-
-        if i>0 and i<=n:
-            pos=np.mat([xx[0,i-1],yy[0,i-1],zz[0,i-1]])
-        elif i<=0:
-            pos=np.mat([0,0,0])
-        else: # i>n
-            pos=np.mat([xx[0,n-1],yy[0,n-1],zz[0,n-1]])
-        return pos
-    def getJointAng(self, i: int):
-        if i>0 and i<=self.n:
-            q=self.k.ik(self.getPos(i))            
-        elif i<=0:
-            q=self.k.ik(self.getPos(1))           
+            q=np.mat([0,0,0])
         else: # i>n
             q=self.k.ik(self.getPos(self.n))
         return q
 
-class motortestplaner(planer): # 测试电机动态特性用
-    def __init__(self,_n:int=10):
-        self.n=_n
-    def getStepJointAng(self, i: int):
-        n=self.n
-        ang=np.linspace(0,1,n)
-        if i>=0 and i<self.n:
-            q=ang[i]         
-        elif i<0:
-            q=ang[0]           
-        else: # i>=n
-            q=ang[n-1] 
-        return q
-    def getPulseJointAng(self, i: int):
-        n=int(self.n/2)*2
-        l=int(n/2)
-        ang1=np.linspace(0,1,l)
-        ang2=np.linspace(1,0,l)
-        ang=np.hstack([ang1,ang2])
-        if i>=0 and i<self.n:
-            q=ang[i]         
-        elif i<0:
-            q=ang[0]           
-        else: # i>=n
-            q=ang[n-1] 
-        return q
+
 
 
 
@@ -322,16 +260,12 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
     limit=np.reshape(limit,[3,1])
     feedback=np.reshape(feedback,[3,1])
 
-    if np.abs(feedback[0,0])>10 or np.abs(feedback[1,0])>10 or np.abs(feedback[2,0])>10:
-        b=0
-        print(feedback)
+    norm_limit=np.linalg.norm(limit)
+    shadow=np.linalg.norm(feedback.T@limit)/norm_limit
+    if shadow>=norm_limit and feedback.T@limit>=0: # 投影模值大于limit的模值 且 同向
+        b=1
     else:
-        norm_limit=np.linalg.norm(limit)
-        shadow=np.linalg.norm(feedback.T@limit)/norm_limit
-        if shadow>=norm_limit and feedback.T@limit>=0: # 投影模值大于limit的模值 且 同向
-            b=1
-        else:
-            b=0
+        b=0
     return b
 
 # arg=np.mat([0,100,100,0,0,0])
@@ -348,19 +282,18 @@ def overlimit(limit,feedback): # 输入两个3维vector：limit和feedback，
 ## =====================================================================
 
 # ## 机器人数据
-arg=np.mat([0,100,100,0,0,0])
-px=np.mat([198,0,0])
+# arg=np.mat([0,100,100,0,0,0])
+# px=np.mat([198,0,0])
 # ## =====================================================================
 # ## 测试直线plr，用v2的正逆运动学
 # k1=finger_link(arg) #测v1
 # k=finger_RRR(arg)
 # # print(k.ik(px))
 # # print(k.fk(k.ik(px)))
-# lplr=testcatchplaner(k,10)
+# lplr=testlineplaner(k,10)
 # for i in range(12):
-#     # print(lplr.getPos(i))
-#     q=lplr.getJointAng(i)
-#     print(q)
+#     # q=lplr.getJointAng(i)
+#     # print(q)
 #     # j=k.jacobian(q)   #测v2的jacob
 #     # print(j)          #测v2的jacob
 #     # jj=k1.jacobian(q) #测v1的jacob
@@ -396,3 +329,8 @@ px=np.mat([198,0,0])
 # pll=arrayplaner(finger_RRR(arg),pp)
 # for i in range(12):
 #     print(pll.getJointAng(i))
+
+
+
+
+

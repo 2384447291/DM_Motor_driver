@@ -30,7 +30,7 @@ def usart_Baudrate():#921600s
     return send_data     
 
 class USB2CAN(object):  
-    def __init__(self,target_serial): 
+    def __init__(self): 
         #                            帧头		 帧长	 命令	发送次数			   时间间隔				  ID类型 CAN ID	  帧类型   len	 idAcc	 dataAcc  data[len]		  CRC
         self.send_template=np.array([0x55,0xAA,  0x1e,  0x01,  0x01,0x00,0x00,0x00,  0x0a,0x00,0x00,0x00,  0x00,  0,0,0,0,  0x00,  0x08,  0x00,  0x00,  0,0,0,0,0,0,0,0,  0x88],np.uint8)
         ports_list = list(serial.tools.list_ports.comports())  
@@ -44,7 +44,7 @@ class USB2CAN(object):
                 uart_2_str = str(port)
                 uart_name_list = uart_2_str.split()
                 for j in uart_name_list:
-                    if target_serial == j:
+                    if "串行设备" == j:
                         plist_0 = port
                         serialName = plist_0[0]
                         serialFd = serial.Serial(serialName,921600, timeout=60)
@@ -63,14 +63,17 @@ class USB2CAN(object):
         else:
             send_data[13] = CAN_ID >> 8
             send_data[14] = CAN_ID & 0xFF  
-        #前方有dji大便
-        if CAN_ID == 0x200:
-            send_data[13] = 0x0
-            send_data[14] = 0x2             
         send_data[21:29]=Data
         # Hex_send_data = [hex(i) for i in send_data]
         # print(Hex_send_data)
-        self.Serial.write(bytes(send_data.T))              
+        self.Serial.write(bytes(send_data.T))    
+    
+    #调不调用无所谓
+    # def Communication_connection(self):
+    #     if(self.Serial.isOpen()):
+    #         print("连接设备成功")
+    #         self.Serial.write(bytes(usart_Baudrate().T))  
+    #         self.Serial.write(bytes(can_Baudrate().T))              
 
 class canMsg:
     def __init__(self,_ID,_data):
